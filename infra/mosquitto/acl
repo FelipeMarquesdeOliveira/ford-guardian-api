@@ -1,0 +1,7 @@
+# Cada dispositivo só publica na sua própria fila de telemetria e só lê os próprios comandos.
+pattern write ford/veiculos/%u/telemetria
+pattern read  ford/veiculos/%u/comandos
+
+# A ponte (bridge) da API consome a telemetria de todos os dispositivos e nada publica nela.
+user api-bridge
+topic read ford/veiculos/+/telemetria
