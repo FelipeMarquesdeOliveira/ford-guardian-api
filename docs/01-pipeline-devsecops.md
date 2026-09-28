@@ -19,6 +19,7 @@ Atualização de dependências: [`.github/dependabot.yml`](../.github/dependabot
 | 5 | Container e IaC | Hadolint, Trivy `config`, Trivy `image` | todo push/PR e semanal | Dockerfile/compose inseguros, CVEs do SO e dos pacotes da imagem | imagem vulnerável ou mal configurada em produção | HIGH/CRITICAL bloqueia |
 
 Proteções do próprio pipeline:
+
 - permissões mínimas (`permissions: contents: read`);
 - actions fixadas por **hash de commit** (não por tag mutável), o que evita ataque de cadeia de suprimentos via action comprometida;
 - Dependabot com **cooldown** de 7 dias, para não adotar uma versão maliciosa recém-publicada;
@@ -43,7 +44,14 @@ Lição registrada: as regras padrão do Gitleaks não detectaram os segredos do
 (valores legíveis). A ferramenta foi calibrada com uma regra específica para as variáveis de segredo do projeto
 ([`.gitleaks.toml`](../.gitleaks.toml)).
 
-## 1.3 Como o pipeline é executado no projeto Ford
+## 1.3 Execução real no GitHub Actions
+
+Primeira execução do pipeline com todas as correções: os 5 jobs aprovados em 52 segundos
+([execução pública](https://github.com/FelipeMarquesdeOliveira/ford-guardian-api/actions/runs/36367127571)).
+
+![Execução do pipeline no GitHub Actions](img/pipeline-execucao.png)
+
+## 1.4 Como o pipeline é executado no projeto Ford
 
 1. **Branch protection na `main`:** merge só por pull request, com os 5 jobs obrigatórios verdes e revisão de outro integrante.
 2. **Pull request:** o desenvolvedor abre o PR; os jobs rodam em paralelo (o de container depende dos testes). Um achado
