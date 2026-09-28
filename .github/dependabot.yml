@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }   # evita adotar versões recém-publicadas (pacotes maliciosos)
+    open-pull-requests-limit: 5
+    labels: [dependencias, seguranca]
+  - package-ecosystem: docker
+    directory: "/"
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
