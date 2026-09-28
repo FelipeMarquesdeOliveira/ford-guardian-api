@@ -1,38 +1,27 @@
 const express = require('express');
+const authenticate = require('../middleware/auth.middleware');
+const { requireRole, ROLES } = require('../middleware/rbac.middleware');
+const { securityMonitor } = require('../utils/securityMonitor');
+const { store } = require('../data/store');
+const tokens = require('../security/tokens');
+const { registrarEvento } = require('../observability/security-events');
+
+// Antes da Sprint 3 estas rotas não exigiam autenticação. Agora: somente ADMIN.
 const router = express.Router();
-const securityMonitor = require('../utils/securityMonitor').securityMonitor;
-const logger = require('../utils/logger');
+router.use(authenticate, requireRole(ROLES.ADMIN));
 
 router.get('/status', (req, res) => {
-  const status = securityMonitor.getSecurityStatus();
-
-  res.status(200).json({
-    success: true,
-    data: status
-  });
+  res.json({ success: true, data: { ...securityMonitor.status(), usuariosAtivos: store.users.filter(u => u.active).length,
+    uptimeSegundos: Math.round(process.uptime()) } });
 });
 
-router.get('/alerts', (req, res) => {
-  const { limit = 50 } = req.query;
-  const alerts = securityMonitor.getSecurityStatus().recentAlerts.slice(0, Number(limit));
-
-  res.status(200).json({
-    success: true,
-    data: alerts
-  });
-});
-
-router.post('/clear', (req, res) => {
-  const { maxAge } = req.body;
-
-  securityMonitor.clearOldRecords(maxAge || 24 * 60 * 60 * 1000);
-
-  logger.info('Security monitor records cleared', { maxAge });
-
-  res.status(200).json({
-    success: true,
-    message: 'Records cleared successfully'
-  });
+// Contenção de incidente: encerra todas as sessões de um usuário (ex.: token vazado)
+router.post('/users/:id/revoke-sessions', (req, res) => {
+  const usuario = store.users.find(u => u.id === req.params.id);
+  if (!usuario) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'Usuário não encontrado', requestId: req.id } });
+  tokens.revogarSessoes(usuario.id);
+  registrarEvento('incident.sessions.revoked', { requestId: req.id, adminId: req.user.id, targetUserId: usuario.id }, 'error');
+  return res.status(204).end();
 });
 
 module.exports = router;

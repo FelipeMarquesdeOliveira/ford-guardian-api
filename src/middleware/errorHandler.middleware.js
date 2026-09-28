@@ -1,43 +1,32 @@
-const logger = require('../utils/logger');
+const { logger } = require('../observability/logger');
 
 class AppError extends Error {
-  constructor(message, statusCode, code) {
+  constructor(message, statusCode, code, details) {
     super(message);
     this.statusCode = statusCode;
     this.code = code;
+    this.details = details;
     this.isOperational = true;
-    Error.captureStackTrace(this, this.constructor);
   }
 }
 
-const errorHandler = (err, req, res, next) => {
-  err.statusCode = err.statusCode || 500;
-  err.status = err.status || 'error';
-
-  const response = {
-    success: false,
-    error: {
-      code: err.code || 'INTERNAL_SERVER_ERROR',
-      message: err.isOperational ? err.message : 'An unexpected error occurred'
-    }
-  };
-
-  if (process.env.NODE_ENV === 'development' && !err.isOperational) {
-    response.error.stack = err.stack;
+// Resposta de erro padronizada; nunca expõe stack trace, SQL ou nomes de bibliotecas.
+function errorHandler(err, req, res, next) {
+  let erro = err;
+  if (err.type === 'entity.too.large') erro = new AppError('Payload excede o limite de 10kb', 413, 'PAYLOAD_TOO_LARGE');
+  else if (err.type === 'entity.parse.failed') erro = new AppError('JSON malformado', 400, 'MALFORMED_JSON');
+  else if (!err.isOperational) {
+    logger.error('erro.inesperado', { event: 'app.error', requestId: req.id, path: req.path, message: err.message, stack: err.stack });
+    erro = new AppError('Ocorreu um erro inesperado', 500, 'INTERNAL_SERVER_ERROR');
   }
 
-  logger.error(`${err.statusCode} - ${err.message}`, {
-    statusCode: err.statusCode,
-    code: err.code,
-    path: req.path,
-    method: req.method,
-    stack: err.stack
-  });
+  const corpo = { success: false, error: { code: erro.code, message: erro.message, requestId: req.id } };
+  if (erro.details) corpo.error.details = erro.details;
+  res.status(erro.statusCode).json(corpo);
+}
 
-  res.status(err.statusCode).json(response);
-};
+function notFound(req, res, next) {
+  next(new AppError('Recurso não encontrado', 404, 'NOT_FOUND'));
+}
 
-module.exports = {
-  AppError,
-  errorHandler
-};
+module.exports = { AppError, errorHandler, notFound };

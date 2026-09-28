@@ -1,40 +1,15 @@
 const express = require('express');
-const router = express.Router();
-const authController = require('../controllers/auth.controller');
+const c = require('../controllers/auth.controller');
 const authenticate = require('../middleware/auth.middleware');
-const { authValidation, registerValidation, sanitizeInput, validate } = require('../middleware/validator.middleware');
-const { authLimiter } = require('../middleware/rateLimiter.middleware');
-const { verifySignature } = require('../middleware/hmac.middleware');
+const wrap = require('../utils/wrap');
+const { sanitizeInput, validate, loginValidation, registerValidation, refreshValidation } = require('../middleware/validator.middleware');
 
-router.post('/login',
-  authLimiter,
-  sanitizeInput,
-  authValidation,
-  validate,
-  verifySignature,
-  authController.login
-);
-
-router.post('/register',
-  sanitizeInput,
-  registerValidation,
-  validate,
-  verifySignature,
-  authController.register
-);
-
-router.post('/refresh',
-  authController.refreshToken
-);
-
-router.post('/logout',
-  authenticate,
-  authController.logout
-);
-
-router.get('/profile',
-  authenticate,
-  authController.getProfile
-);
-
-module.exports = router;
+module.exports = (authLimiter) => {
+  const router = express.Router();
+  router.post('/login', authLimiter, sanitizeInput, loginValidation, validate, wrap(c.login));
+  router.post('/register', authLimiter, sanitizeInput, registerValidation, validate, wrap(c.register));
+  router.post('/refresh', authLimiter, refreshValidation, validate, wrap(c.refresh));
+  router.post('/logout', authenticate, wrap(c.logout));
+  router.get('/profile', authenticate, wrap(c.profile));
+  return router;
+};

@@ -37,7 +37,7 @@ const mockUsers = [
     id: 'usr_003',
     name: 'Felipe Marques',
     email: 'felipe@example.com',
-    password: '123456',
+    password: 'Felipe@123',
     phone: '+5511987654323',
     role: 'user',
     createdAt: '2024-03-10T14:00:00.000Z',

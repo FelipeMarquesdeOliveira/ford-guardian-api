@@ -1,71 +1,27 @@
-const logger = require('../utils/logger');
 const { AppError } = require('./errorHandler.middleware');
+const { registrarEvento } = require('../observability/security-events');
 
-const ROLES = {
-  ADMIN: 'admin',
-  ANALYST: 'analyst',
-  USER: 'user'
+/**
+ * Perfis: admin (Administrador Ford), analyst (Gestor / analista de pós-venda), user (cliente).
+ */
+const ROLES = { ADMIN: 'admin', ANALYST: 'analyst', USER: 'user' };
+
+const requireRole = (...permitidos) => (req, res, next) => {
+  if (!req.user) return next(new AppError('Autenticação necessária', 401, 'AUTH_REQUIRED'));
+  if (!permitidos.includes(req.user.role)) {
+    registrarEvento('authz.denied', { requestId: req.id, userId: req.user.id, role: req.user.role,
+      requiredRoles: permitidos, path: req.originalUrl });
+    return next(new AppError('Acesso negado para o seu perfil', 403, 'INSUFFICIENT_PERMISSIONS'));
+  }
+  return next();
 };
 
-const PERMISSIONS = {
-  admin: ['read', 'write', 'delete', 'update', 'manage'],
-  analyst: ['read', 'write'],
-  user: ['read']
-};
+/** Proteção contra BOLA (OWASP API1): cliente só acessa recursos que pertencem a ele. */
+function garantirPropriedade(req, donoId) {
+  if (req.user.role === ROLES.USER && donoId !== req.user.id) {
+    registrarEvento('authz.bola.blocked', { requestId: req.id, userId: req.user.id, path: req.originalUrl });
+    throw new AppError('Acesso negado a este recurso', 403, 'ACCESS_DENIED');
+  }
+}
 
-const requireRole = (...allowedRoles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      throw new AppError('Authentication required.', 401, 'AUTH_REQUIRED');
-    }
-
-    if (!allowedRoles.includes(req.user.role)) {
-      logger.warn('Unauthorized role access attempt', {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requiredRoles: allowedRoles,
-        path: req.path
-      });
-      throw new AppError(
-        'Access denied. Insufficient permissions.',
-        403,
-        'INSUFFICIENT_PERMISSIONS'
-      );
-    }
-
-    next();
-  };
-};
-
-const requirePermission = (permission) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      throw new AppError('Authentication required.', 401, 'AUTH_REQUIRED');
-    }
-
-    const userPermissions = PERMISSIONS[req.user.role] || [];
-
-    if (!userPermissions.includes(permission)) {
-      logger.warn('Permission denied', {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requiredPermission: permission,
-        path: req.path
-      });
-      throw new AppError(
-        'Access denied. Required permission not found.',
-        403,
-        'PERMISSION_DENIED'
-      );
-    }
-
-    next();
-  };
-};
-
-module.exports = {
-  ROLES,
-  PERMISSIONS,
-  requireRole,
-  requirePermission
-};
+module.exports = { ROLES, requireRole, garantirPropriedade };

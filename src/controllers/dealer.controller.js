@@ -1,5 +1,5 @@
 const { mockDealers, searchDealersByCity } = require('../../mockData/dealers.mock');
-const logger = require('../utils/logger');
+const { logger } = require('../observability/logger');
 const { AppError } = require('../middleware/errorHandler.middleware');
 
 const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -99,7 +99,7 @@ const searchDealers = async (req, res, next) => {
       return a.distance - b.distance;
     });
 
-    logger.info('Dealer search performed', { query: q, results: dealers.length, userId: req.user?.id });
+    logger.info('dealer.search', { event: 'dealer.search', results: dealers.length, userId: req.user?.id });
 
     res.status(200).json({
       success: true,

@@ -1,102 +1,52 @@
-const logger = require('../utils/logger');
+const config = require('../config');
+const { registrarEvento } = require('../observability/security-events');
 
+/**
+ * Bloqueio de conta por tentativas de login (proteção contra força bruta / credential stuffing).
+ * Complementa o rate limit por IP: atacantes distribuídos em vários IPs também são barrados.
+ */
 class SecurityMonitor {
-  constructor() {
-    this.failedAttempts = new Map();
-    this.suspiciousPatterns = [];
-    this.maxFailedAttempts = 5;
-    this.lockoutDuration = 15 * 60 * 1000;
+  constructor({ maxTentativas, janelaMs }) {
+    this.maxTentativas = maxTentativas;
+    this.janelaMs = janelaMs;
+    this.falhas = new Map();
   }
 
-  recordFailedAttempt(identifier, ip) {
-    const key = `${identifier || 'unknown'}_${ip}`;
-    const attempts = this.failedAttempts.get(key) || { count: 0, firstAttempt: Date.now() };
-
-    attempts.count++;
-    attempts.lastAttempt = Date.now();
-    this.failedAttempts.set(key, attempts);
-
-    if (attempts.count >= this.maxFailedAttempts) {
-      this.triggerAlert('EXCESSIVE_AUTH_FAILURES', { identifier, ip, attempts: attempts.count });
-
-      const lockoutUntil = attempts.firstAttempt + this.lockoutDuration;
-      if (Date.now() < lockoutUntil) {
-        return {
-          locked: true,
-          unlockAt: new Date(lockoutUntil).toISOString(),
-          remainingMinutes: Math.ceil((lockoutUntil - Date.now()) / 60000)
-        };
-      }
-    }
-
-    return { locked: false };
-  }
-
-  recordSuccessfulLogin(identifier, ip) {
-    const key = `${identifier}_${ip}`;
-    this.failedAttempts.delete(key);
-  }
-
-  triggerAlert(type, details) {
-    logger.warn('Security alert triggered', { alertType: type, ...details });
-
-    if (type === 'EXCESSIVE_AUTH_FAILURES') {
-      logger.warn('Account lockout triggered due to failed attempts', details);
-    }
-
-    if (type === 'ANOMALY_DETECTED') {
-      logger.warn('Anomalous behavior detected', details);
-    }
-
-    if (type === 'DATA_ACCESS_ANOMALY') {
-      logger.warn('Unusual data access pattern', details);
-    }
-
-    this.suspiciousPatterns.push({ type, timestamp: new Date().toISOString(), details });
-  }
-
-  detectAnomaly(userId, action, frequency) {
-    if (frequency > 100) {
-      this.triggerAlert('ANOMALY_DETECTED', { userId, action, frequency, message: 'Unusual high frequency of actions detected' });
-      return true;
-    }
+  estaBloqueado(email) {
+    const registro = this.falhas.get(email);
+    if (!registro || !registro.bloqueadoAte) return false;
+    if (registro.bloqueadoAte > Date.now()) return true;
+    this.falhas.delete(email);
     return false;
   }
 
-  checkDataAccessPattern(userId, accessedResources, timeWindow) {
-    const accessCount = accessedResources.length;
-    const threshold = 50;
-
-    if (accessCount > threshold) {
-      this.triggerAlert('DATA_ACCESS_ANOMALY', { userId, accessedResources: accessCount, timeWindow, message: 'Mass data access detected' });
-      return true;
+  registrarFalha(email, ip, requestId) {
+    const agora = Date.now();
+    const registro = this.falhas.get(email) || { tentativas: 0, inicio: agora };
+    if (agora - registro.inicio > this.janelaMs) Object.assign(registro, { tentativas: 0, inicio: agora });
+    registro.tentativas += 1;
+    if (registro.tentativas >= this.maxTentativas) {
+      registro.bloqueadoAte = agora + this.janelaMs;
+      registrarEvento('auth.account.locked', { requestId, ip, attempts: registro.tentativas }, 'error');
     }
-    return false;
+    this.falhas.set(email, registro);
+    return registro.tentativas;
   }
 
-  getSecurityStatus() {
-    return {
-      activeLockouts: this.failedAttempts.size,
-      suspiciousAlerts: this.suspiciousPatterns.length,
-      recentAlerts: this.suspiciousPatterns.slice(-10)
-    };
+  registrarSucesso(email) {
+    this.falhas.delete(email);
   }
 
-  clearOldRecords(maxAge = 24 * 60 * 60 * 1000) {
-    const cutoff = Date.now() - maxAge;
+  status() {
+    return { contasMonitoradas: this.falhas.size,
+      contasBloqueadas: [...this.falhas.values()].filter(r => r.bloqueadoAte > Date.now()).length };
+  }
 
-    this.failedAttempts.forEach((value, key) => {
-      if (value.lastAttempt < cutoff) {
-        this.failedAttempts.delete(key);
-      }
-    });
-
-    this.suspiciousPatterns = this.suspiciousPatterns.filter(
-      p => new Date(p.timestamp).getTime() > cutoff
-    );
+  limpar() {
+    this.falhas.clear();
   }
 }
 
-const securityMonitor = new SecurityMonitor();
+const securityMonitor = new SecurityMonitor(config.lockout);
 
 module.exports = { SecurityMonitor, securityMonitor };
