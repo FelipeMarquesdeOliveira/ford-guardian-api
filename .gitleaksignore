@@ -11,3 +11,5 @@ f841bb4bb8e810687f5aa3a578f345889b137236:.env:ford-guardian-segredo-env:16
 64b2640db316c85c54d411281c63973d7696711a:README.md:ford-guardian-segredo-env:123
 64b2640db316c85c54d411281c63973d7696711a:README.md:ford-guardian-segredo-env:124
 47bba817046ed246ad7f4656be2f17917e1298b9:src/utils/encryption.js:ford-guardian-segredo-env:4
+# Token JWT forjado de propósito (alg none, sem assinatura) usado pelo gerador de ataques simulados.
+c2b9bd4fcda64699373eeb6511a84540ab4dcce6:scripts/gerar-trafego.js:jwt:32

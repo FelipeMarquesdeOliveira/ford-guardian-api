@@ -6,7 +6,7 @@ useDefault = true
 [[rules]]
 id = "ford-guardian-segredo-env"
 description = "Segredo da aplicação (JWT, HMAC, criptografia, métricas) atribuído em arquivo de ambiente"
-regex = '''(?i)(JWT_SECRET|JWT_REFRESH_SECRET|HMAC_SECRET|IOT_HMAC_SECRET|ENCRYPTION_KEY|METRICS_TOKEN)[ \t]*=[ \t]*['"]?([^\s#'"]{8,})'''
+regex = '''(?i)(JWT_SECRET|JWT_REFRESH_SECRET|HMAC_SECRET|IOT_HMAC_SECRET|ENCRYPTION_KEY|METRICS_TOKEN)[ \t]*=[ \t]*['"]?([^\s#'"$][^\s#'"]{7,})'''
 secretGroup = 2
 keywords = ["jwt_secret", "hmac_secret", "encryption_key", "metrics_token"]
 
