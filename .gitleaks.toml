@@ -1,0 +1,16 @@
+# Regras padrão do Gitleaks + regra do projeto para segredos de baixa entropia em arquivos de ambiente
+# (o .env da Sprint 1 não era detectado pelas regras padrão por usar valores legíveis).
+[extend]
+useDefault = true
+
+[[rules]]
+id = "ford-guardian-segredo-env"
+description = "Segredo da aplicação (JWT, HMAC, criptografia, métricas) atribuído em arquivo de ambiente"
+regex = '''(?i)(JWT_SECRET|JWT_REFRESH_SECRET|HMAC_SECRET|IOT_HMAC_SECRET|ENCRYPTION_KEY|METRICS_TOKEN)[ \t]*=[ \t]*['"]?([^\s#'"]{8,})'''
+secretGroup = 2
+keywords = ["jwt_secret", "hmac_secret", "encryption_key", "metrics_token"]
+
+# Fixtures de teste (segredos descartáveis dos testes automatizados) e relatórios das próprias ferramentas
+[allowlist]
+description = "Arquivos que não contêm segredos reais"
+paths = ['''(^|/)tests/''', '''(^|/)docs/evidencias/''']

@@ -1,0 +1,13 @@
+# Achados históricos analisados na Sprint 3 (ver docs/02-seguranca-codigo-infra.md, seção 1).
+# Verdadeiros positivos REMEDIADOS: .env versionado na Sprint 1. O arquivo foi removido, entrou no
+# .gitignore e os valores foram revogados: a API não os usa mais (segredos obrigatórios via variável
+# de ambiente em produção e gerados aleatoriamente em dev/test).
+f841bb4bb8e810687f5aa3a578f345889b137236:.env:ford-guardian-segredo-env:4
+f841bb4bb8e810687f5aa3a578f345889b137236:.env:ford-guardian-segredo-env:5
+f841bb4bb8e810687f5aa3a578f345889b137236:.env:ford-guardian-segredo-env:9
+f841bb4bb8e810687f5aa3a578f345889b137236:.env:ford-guardian-segredo-env:16
+# Falsos positivos: placeholders de exemplo no README antigo e leitura de process.env em código removido.
+64b2640db316c85c54d411281c63973d7696711a:README.md:ford-guardian-segredo-env:122
+64b2640db316c85c54d411281c63973d7696711a:README.md:ford-guardian-segredo-env:123
+64b2640db316c85c54d411281c63973d7696711a:README.md:ford-guardian-segredo-env:124
+47bba817046ed246ad7f4656be2f17917e1298b9:src/utils/encryption.js:ford-guardian-segredo-env:4

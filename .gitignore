@@ -2,7 +2,12 @@ node_modules/
 .env
 *.log
 logs/
-.DS_Store
 coverage/
 dist/
+.DS_Store
 .vscode/
+infra/certs/*.key
+infra/certs/*.pem
+infra/certs/*.crt
+infra/mosquitto/passwd
+infra/prometheus/metrics_token
