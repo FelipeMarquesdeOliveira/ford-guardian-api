@@ -1,0 +1,51 @@
+groups:
+  - name: ford-guardian-seguranca
+    rules:
+      - alert: LoginFalhasElevadas
+        expr: sum(increase(security_events_total{event="auth.login.failed"}[5m])) > 10
+        for: 1m
+        labels: { severity: high }
+        annotations:
+          summary: "Mais de 10 falhas de login em 5 minutos (possível força bruta)"
+          playbook: "docs/03b-resposta-a-incidentes.md#playbook-1"
+      - alert: ContaBloqueada
+        expr: sum(increase(security_events_total{event="auth.account.locked"}[5m])) > 0
+        labels: { severity: medium }
+        annotations:
+          summary: "Conta bloqueada por excesso de tentativas"
+      - alert: PicoAcessoNegado
+        expr: sum(increase(security_events_total{event=~"authz.denied|authz.bola.blocked|auth.token.rejected"}[5m])) > 20
+        for: 2m
+        labels: { severity: high }
+        annotations:
+          summary: "Pico de 401/403: possível varredura ou uso de token roubado"
+      - alert: ReusoDeRefreshToken
+        expr: sum(increase(security_events_total{event="auth.refresh.rejected"}[10m])) > 3
+        labels: { severity: high }
+        annotations:
+          summary: "Refresh tokens inválidos ou reutilizados (possível sequestro de sessão)"
+      - alert: TelemetriaAssinaturaInvalida
+        expr: sum(increase(iot_telemetry_total{result="rejected"}[5m])) > 5
+        labels: { severity: high }
+        annotations:
+          summary: "Mensagens IoT com assinatura inválida/replay (dispositivo comprometido?)"
+          playbook: "docs/03b-resposta-a-incidentes.md#playbook-3"
+      - alert: RateLimitAtingido
+        expr: sum(increase(security_events_total{event="ratelimit.exceeded"}[5m])) > 50
+        labels: { severity: medium }
+        annotations:
+          summary: "Rate limit acionado com frequência (abuso/scraping)"
+  - name: ford-guardian-disponibilidade
+    rules:
+      - alert: TaxaErros5xx
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 1) > 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Mais de 5% das requisições com erro 5xx"
+      - alert: LatenciaAlta
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 5m
+        labels: { severity: medium }
+        annotations:
+          summary: "p95 de latência acima de 1s"
