@@ -68,11 +68,11 @@ Os eventos abaixo são gerados pela API em JSON (uma linha por evento). Dados pe
 
 ```json
 {"timestamp":"2026-09-27T21:04:12.381Z","level":"warn","service":"ford-guardian-api","event":"auth.login.failed","requestId":"8f1c2a7e-4b1d-4c55-9a0e-2f6d3b9e1a01","ip":"203.0.113.24","email":"fe***@example.com","reason":"INVALID_CREDENTIALS","attempt":4}
-{"timestamp":"2026-09-27T21:04:19.902Z","level":"warn","service":"ford-guardian-api","event":"auth.account.locked","requestId":"1b7d9e30-6c2f-4e8a-b3d1-7a5f0c2e9b44","ip":"203.0.113.24","userId":"u-1042","email":"fe***@example.com","failedAttempts":5,"lockMinutes":15}
+{"timestamp":"2026-09-27T21:04:19.902Z","level":"warn","service":"ford-guardian-api","event":"auth.account.locked","requestId":"1b7d9e30-6c2f-4e8a-b3d1-7a5f0c2e9b44","ip":"203.0.113.24","userId":"usr_004","email":"fe***@example.com","failedAttempts":5,"lockMinutes":15}
 {"timestamp":"2026-09-27T21:04:25.117Z","level":"warn","service":"ford-guardian-api","event":"ratelimit.exceeded","requestId":"c4e8f1a2-9d3b-47c6-8e21-5b0a6d7f3c90","ip":"203.0.113.24","route":"POST /api/auth/login","limiter":"login","windowMinutes":15}
-{"timestamp":"2026-09-27T21:12:03.554Z","level":"warn","service":"ford-guardian-api","event":"authz.denied","requestId":"5a2b7c9d-1e3f-4a6b-8c0d-9e2f4a6b8c1d","ip":"198.51.100.77","userId":"u-2087","role":"user","route":"GET /api/vehicles/veh_003","reason":"OBJECT_OWNERSHIP"}
+{"timestamp":"2026-09-27T21:12:03.554Z","level":"warn","service":"ford-guardian-api","event":"authz.bola.blocked","requestId":"5a2b7c9d-1e3f-4a6b-8c0d-9e2f4a6b8c1d","ip":"198.51.100.77","userId":"usr_003","role":"user","path":"/api/vehicles/veh_003"}
 {"timestamp":"2026-09-27T21:18:47.206Z","level":"error","service":"ford-guardian-api","event":"iot.telemetry.rejected","requestId":"e9f0a1b2-3c4d-4e5f-9a8b-7c6d5e4f3a2b","deviceId":"obd-7f3a91","vin":"***********4X821","reason":"INVALID_SIGNATURE","clockSkewSeconds":2}
-{"timestamp":"2026-09-27T21:25:31.640Z","level":"info","service":"ford-guardian-api","event":"audit.vehicle.deleted","requestId":"0d1e2f3a-4b5c-4d6e-8f9a-1b2c3d4e5f6a","ip":"198.51.100.12","userId":"u-0001","role":"admin","resourceId":"v-3310","result":"SUCCESS"}
+{"timestamp":"2026-09-27T21:25:31.640Z","level":"info","service":"ford-guardian-api","event":"audit.vehicle.deleted","requestId":"0d1e2f3a-4b5c-4d6e-8f9a-1b2c3d4e5f6a","ip":"198.51.100.12","userId":"usr_001","role":"admin","resourceId":"veh_003","result":"SUCCESS"}
 ```
 
 | Evento | Uso na resposta |
@@ -81,7 +81,7 @@ Os eventos abaixo são gerados pela API em JSON (uma linha por evento). Dados pe
 | `auth.account.locked` | Confirma a atuação do bloqueio automático; volume alto indica ataque distribuído (playbook 1) |
 | `ratelimit.exceeded` | Indica automação/abuso por IP e rota (playbooks 1 e 2) |
 | `authz.denied` | Tentativas de BOLA/BFLA; pico indica varredura de IDs ou uso de token roubado (playbooks 2 e 4) |
-| `iot.telemetry.rejected` | Base do alerta `TelemetriaAssinaturaInvalida`; motivos `INVALID_SIGNATURE` e `TIMESTAMP_OUT_OF_WINDOW` (playbook 3) |
+| `iot.telemetry.rejected` | Base do alerta `TelemetriaAssinaturaInvalida`; motivos `INVALID_SIGNATURE` e `STALE_TIMESTAMP` (playbook 3) |
 | `audit.*` | Reconstrução da linha do tempo de ações críticas e responsabilização (todos os playbooks) |
 
 ---
@@ -115,7 +115,7 @@ Os eventos abaixo são gerados pela API em JSON (uma linha por evento). Dados pe
 
 | Etapa | Ações |
 |---|---|
-| Gatilho | Alerta Prometheus `TelemetriaAssinaturaInvalida`; eventos `iot.telemetry.rejected` com motivo `INVALID_SIGNATURE` ou `TIMESTAMP_OUT_OF_WINDOW` (replay); valores fisicamente implausíveis aceitos (odômetro regredindo, saltos de posição); publicações negadas pela ACL no log do Mosquitto; conexões de um mesmo `deviceId` a partir de origens diferentes. Severidade inicial: SEV2 |
+| Gatilho | Alerta Prometheus `TelemetriaAssinaturaInvalida`; eventos `iot.telemetry.rejected` com motivo `INVALID_SIGNATURE` ou `STALE_TIMESTAMP` (replay); valores fisicamente implausíveis aceitos (odômetro regredindo, saltos de posição); publicações negadas pela ACL no log do Mosquitto; conexões de um mesmo `deviceId` a partir de origens diferentes. Severidade inicial: SEV2 |
 | Análise | Identificar `deviceId`, VIN e titular afetados; distinguir falha técnica (relógio dessincronizado, firmware desatualizado) de ataque (assinatura inválida persistente, replay, dispositivo clonado); verificar se a telemetria forjada gerou alertas preditivos ou agendamentos indevidos; verificar se outros dispositivos apresentam o mesmo padrão (chave comprometida em lote) |
 | Contenção | Revogar a credencial MQTT do dispositivo: remover o usuário do arquivo de senhas (`mosquitto_passwd -D <arquivo> <deviceId>`) e a entrada correspondente na ACL; recarregar a configuração do broker (sinal SIGHUP) e, se a sessão ativa persistir, desconectar o cliente reiniciando o broker. Colocar o `deviceId` em quarentena na API (rejeitar `POST /api/telemetry`); marcar a telemetria do período como não confiável e suspender alertas preditivos daquele veículo |
 | Erradicação | Rotacionar a chave HMAC do dispositivo (e a chave compartilhada, se o comprometimento for em lote); reprovisionar o dispositivo com nova credencial MQTT; atualizar o firmware se a causa for vulnerabilidade no OBD; inspeção física na concessionária em caso de dispositivo adulterado |
