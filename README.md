@@ -1,170 +1,89 @@
-# Ford Guardian API
+# Ford Guardian API - Sprint 3 Cybersecurity (DevSecOps)
 
-Backend API for Ford Guardian Mobile Application - Sprint Cybersecurity
+[![DevSecOps](https://github.com/FelipeMarquesdeOliveira/ford-guardian-api/actions/workflows/devsecops.yml/badge.svg)](https://github.com/FelipeMarquesdeOliveira/ford-guardian-api/actions/workflows/devsecops.yml)
 
-## Overview
+Backend do app **Ford Guardian** (Desafio 02 - Impulsionando o VIN Share, Ford x FIAP 2026): veículos, alertas
+preditivos de manutenção, telemetria IoT e busca de concessionárias. Nesta sprint o trabalho de cibersegurança
+evoluiu para **DevSecOps**: a segurança passou a fazer parte do ciclo de desenvolvimento, testes, deploy e operação.
 
-This API provides secure endpoints for the Ford Guardian vehicle monitoring system, implementing comprehensive cybersecurity measures for data protection, authentication, and access control.
+> Dados mockados em memória (autorizado pelo professor). IoT e ML são simulados.
 
-## Technology Stack
+## Entregas da Sprint 3
 
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js 4.18
-- **Authentication**: JWT (JSON Web Tokens)
-- **Security**: Helmet, CORS, Rate Limiting, Input Validation
-- **Encryption**: AES-256 (crypto-js)
-- **Logging**: Winston
-- **Testing**: Jest + Supertest
+| Atividade (peso) | Documento | Principais evidências |
+|---|---|---|
+| 1. Pipeline DevSecOps integrado (3,0) | [docs/01-pipeline-devsecops.md](docs/01-pipeline-devsecops.md) | [workflow](.github/workflows/devsecops.yml), [diagrama](docs/img/pipeline-devsecops.png), Semgrep 14 → 0, Trivy 8 HIGH → 0, Gitleaks no histórico |
+| 2. Segurança em código e infraestrutura (2,5) | [docs/02-seguranca-codigo-infra.md](docs/02-seguranca-codigo-infra.md) | 11 correções no código, AES-256-GCM, JWT seguro, RBAC + BOLA, MQTT/TLS + HMAC, Dockerfile endurecido |
+| 3. Observabilidade, monitoramento e resposta (2,0) | [docs/03-observabilidade.md](docs/03-observabilidade.md) e [docs/03b-resposta-a-incidentes.md](docs/03b-resposta-a-incidentes.md) | logs JSON, métricas Prometheus, 8 alertas, dashboard Grafana, 5 playbooks |
+| 4. Compliance, riscos e segurança contínua (2,5) | [docs/04-compliance-riscos.md](docs/04-compliance-riscos.md) | STRIDE (21 ameaças), OWASP ASVS / API Top 10 / Mobile Top 10, LGPD, plano contínuo, checklist |
 
-## Security Features
+Relatórios das ferramentas e saídas das simulações: [docs/evidencias/](docs/evidencias/).
 
-### 1. Input Validation and Sanitization (20 points)
-- Strict validation for all user inputs using express-validator
-- VIN format validation (17 alphanumeric characters)
-- Email normalization and format checking
-- Password strength requirements (uppercase, lowercase, number, 6-128 chars)
-- Input sanitization against XSS, SQL Injection, and Command Injection
-- Request size limiting (10kb max)
-- Buffer overflow prevention
+## Como executar
 
-### 2. Authentication and Authorization (20 points)
-- JWT-based authentication with access and refresh tokens
-- Access token expiration: 15 minutes
-- Refresh token expiration: 7 days
-- Role-Based Access Control (RBAC) with three roles:
-  - `admin`: Full access (read, write, delete, update, manage)
-  - `analyst`: Read and write access
-  - `user`: Read-only access
-- Secure password hashing with bcrypt (cost factor 12)
-
-### 3. API Protection (20 points)
-- HTTPS/TLS 1.2+ enforcement (configured for production)
-- CORS configured with allowed origins only
-- Rate limiting:
-  - Standard: 100 requests per 15 minutes
-  - Auth: 5 attempts per 15 minutes
-  - Search: 30 requests per minute
-- HMAC payload signature verification
-- Request/response integrity validation
-
-### 4. Data Security and Privacy (25 points)
-- AES-256 encryption for sensitive data at rest
-- Secure data retention policy (90 days default)
-- User data anonymization for logs and analytics
-- No sensitive data in logs (passwords, tokens redacted)
-- Prevention of accidental data exposure
-
-### 5. Monitoring and Auditing (15 points)
-- Structured logging with Winston
-- Audit trail for all critical actions
-- Security event monitoring (failed auth, suspicious activity)
-- Request tracing with X-Request-ID
-- Error handling without stack trace exposure
-
-## API Endpoints
-
-### Authentication
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/api/auth/login` | User login | No |
-| POST | `/api/auth/register` | User registration | No |
-| POST | `/api/auth/refresh` | Refresh access token | No |
-| POST | `/api/auth/logout` | User logout | Yes |
-| GET | `/api/auth/profile` | Get user profile | Yes |
-
-### Vehicles
-| Method | Endpoint | Description | Auth | Roles |
-|--------|----------|-------------|------|--------|
-| GET | `/api/vehicles` | List vehicles | Yes | All |
-| GET | `/api/vehicles/:id` | Get vehicle by ID | Yes | All |
-| POST | `/api/vehicles` | Create vehicle | Yes | All |
-| PUT | `/api/vehicles/:id` | Update vehicle | Yes | All |
-| DELETE | `/api/vehicles/:id` | Delete vehicle | Yes | All |
-| GET | `/api/vehicles/health-stats` | Health statistics | Yes | Admin, Analyst |
-
-### Alerts
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/alerts` | List alerts | Yes |
-| GET | `/api/alerts/unread-count` | Get unread count | Yes |
-| GET | `/api/alerts/:id` | Get alert by ID | Yes |
-| PATCH | `/api/alerts/:id/read` | Mark as read | Yes |
-| PATCH | `/api/alerts/:id/dismiss` | Dismiss alert | Yes |
-
-### Dealers
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/dealers` | List dealers | Yes |
-| GET | `/api/dealers/search` | Search dealers | Yes |
-| GET | `/api/dealers/nearby` | Find nearby dealers | Yes |
-| GET | `/api/dealers/:id` | Get dealer by ID | Yes |
-
-### Monitoring (Admin only)
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/monitoring/status` | Security monitor status | Yes |
-| GET | `/api/monitoring/alerts` | Recent security alerts | Yes |
-| POST | `/api/monitoring/clear` | Clear old records | Yes |
-
-## Installation
+Pré-requisito: Node.js 22+.
 
 ```bash
-npm install
+npm ci
+npm test                 # 39 testes de segurança com cobertura
+npm run lint             # ESLint + eslint-plugin-security
+npm run dev              # API em http://localhost:3000 (segredos aleatórios em modo dev)
 ```
 
-## Configuration
-
-Create a `.env` file based on `.env.example`:
-
-```env
-PORT=3000
-NODE_ENV=development
-JWT_SECRET=your_secret_key
-JWT_REFRESH_SECRET=your_refresh_secret
-ENCRYPTION_KEY=your_encryption_key
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-ALLOWED_ORIGINS=http://localhost:3000
-```
-
-## Running the API
+Com Docker (API + Prometheus + Grafana):
 
 ```bash
-# Development
-npm run dev
-
-# Production
-npm start
-
-# Tests
-npm test
+./scripts/preparar-ambiente.sh       # cria .env com segredos aleatórios (não versionado)
+docker compose up -d --build         # API :3000, Prometheus :9090, Grafana :3001
+npm run trafego:demo                 # uso normal + ataques simulados (alimenta métricas e alertas)
+IOT_HMAC_SECRET=<valor do .env> npm run iot:simular   # dispositivo IoT enviando telemetria assinada
 ```
 
-## Test Credentials
+## Contas de demonstração
 
-| Email | Password | Role |
-|-------|----------|------|
-| admin@ford.com | Admin@123 | admin |
-| analyst@ford.com | Analyst@123 | analyst |
-| felipe@example.com | 123456 | user |
-| maria@example.com | Maria@123 | user |
+| E-mail | Senha | Perfil |
+|---|---|---|
+| `admin@ford.com` | `Admin@123` | `admin` (Administrador) |
+| `analyst@ford.com` | `Analyst@123` | `analyst` (Gestor / analista de pós-venda) |
+| `felipe@example.com` | `Felipe@123` | `user` (cliente) |
+| `maria@example.com` | `Maria@123` | `user` (cliente) |
 
-## Project Structure
+## Endpoints
+
+| Método | Rota | Acesso |
+|---|---|---|
+| POST | `/api/auth/login`, `/api/auth/register`, `/api/auth/refresh` | público (rate limit 5/15 min) |
+| POST | `/api/auth/logout` · GET `/api/auth/profile` | autenticado |
+| GET/POST/PATCH/DELETE | `/api/vehicles`, `/api/vehicles/:id` | autenticado (cliente só os próprios) |
+| GET | `/api/vehicles/health-stats` | `admin`, `analyst` |
+| GET/PATCH | `/api/alerts`, `/api/alerts/:id/read`, `/api/alerts/:id/dismiss` | autenticado (cliente só os próprios) |
+| GET | `/api/dealers`, `/api/dealers/search`, `/api/dealers/nearby` | autenticado |
+| POST | `/api/telemetry` | dispositivo IoT (assinatura HMAC) |
+| GET · DELETE · PATCH | `/api/privacy/me/export` · `/api/privacy/me` · `/api/privacy/me/consents` | titular (LGPD) |
+| GET · POST | `/api/monitoring/status` · `/api/monitoring/users/:id/revoke-sessions` | `admin` |
+| GET | `/metrics` | token do Prometheus |
+| GET | `/health` | público |
+
+## Estrutura
 
 ```
-ford-guardian-api/
-├── src/
-│   ├── controllers/      # Business logic
-│   ├── middleware/      # Security & validation
-│   ├── routes/          # API routes
-│   ├── utils/           # Utilities (logger, encryption)
-│   └── index.js         # Application entry
-├── mockData/            # Mock data for development
-├── tests/               # API tests
-├── package.json
-└── .env
+src/
+├── app.js / index.js       # fábrica do Express (headers, CORS, rate limit, rotas) e servidor HTTP/HTTPS (TLS 1.2+)
+├── config/                 # configuração validada (segredos obrigatórios em produção)
+├── security/               # JWT e refresh tokens, AES-256-GCM, HMAC anti-replay
+├── observability/          # logs JSON com redação, métricas Prometheus, eventos de segurança
+├── middleware/             # autenticação, RBAC/BOLA, validação, rate limit, erros
+├── controllers/ routes/    # auth, veículos, alertas, concessionárias, telemetria, privacidade, monitoramento
+└── data/store.js           # repositório em memória (senhas bcrypt, PII cifrada)
+infra/                      # Prometheus (alertas), Grafana (dashboard), Mosquitto (MQTT/TLS + ACL)
+iot/                        # simulador de dispositivo OBD
+.github/                    # pipeline DevSecOps e Dependabot
+docs/                       # documentos das 4 atividades e evidências
 ```
 
-## License
+## Equipe
 
-MIT
+| Nome | RM |
+|---|---|
+| Felipe Marques de Oliveira | 556319 |
+| Gabriel Barros Cisoto | 556309 |
