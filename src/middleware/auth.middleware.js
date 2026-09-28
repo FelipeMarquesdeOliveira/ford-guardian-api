@@ -1,39 +1,26 @@
-const jwt = require('jsonwebtoken');
-const logger = require('../utils/logger');
+const { validarAccessToken } = require('../security/tokens');
+const { store } = require('../data/store');
 const { AppError } = require('./errorHandler.middleware');
+const { registrarEvento } = require('../observability/security-events');
 
-const authenticate = async (req, res, next) => {
+/** Exige "Authorization: Bearer <jwt>" válido (HS256, iss, aud, exp, tipo e não revogado). */
+function authenticate(req, res, next) {
+  const header = req.get('Authorization') || '';
+  const [tipo, token] = header.split(' ');
+  if (tipo !== 'Bearer' || !token) return next(new AppError('Token de acesso ausente', 401, 'NO_TOKEN'));
+
   try {
-    let token;
-
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
-
-    if (!token) {
-      throw new AppError('Access denied. No token provided.', 401, 'NO_TOKEN');
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role
-    };
-
-    next();
+    const payload = validarAccessToken(token);
+    const usuario = store.users.find(u => u.id === payload.sub && u.active);
+    if (!usuario) throw new AppError('Usuário inativo', 401, 'INVALID_TOKEN');
+    req.user = { id: usuario.id, role: usuario.role, email: usuario.email };
+    req.token = payload;
+    return next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      logger.warn('Expired token used', { email: req.body.email });
-      throw new AppError('Token expired. Please login again.', 401, 'TOKEN_EXPIRED');
-    }
-    if (error.name === 'JsonWebTokenError') {
-      logger.warn('Invalid token used', { path: req.path });
-      throw new AppError('Invalid token.', 401, 'INVALID_TOKEN');
-    }
-    throw error;
+    const codigo = error.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN';
+    registrarEvento('auth.token.rejected', { requestId: req.id, ip: req.ip, path: req.path, reason: codigo });
+    return next(new AppError(codigo === 'TOKEN_EXPIRED' ? 'Token expirado' : 'Token inválido', 401, codigo));
   }
-};
+}
 
 module.exports = authenticate;

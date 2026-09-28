@@ -1,192 +1,71 @@
-const { mockVehicles, getHealthStatusDistribution } = require('../../mockData/vehicles.mock');
-const logger = require('../utils/logger');
+const crypto = require('crypto');
+const { store, publicVehicle } = require('../data/store');
+const { encrypt } = require('../security/crypto');
 const { AppError } = require('../middleware/errorHandler.middleware');
-const { shouldDeleteData } = require('../utils/encryption');
+const { ROLES, garantirPropriedade } = require('../middleware/rbac.middleware');
+const { registrarEvento } = require('../observability/security-events');
 
-const getVehicles = async (req, res, next) => {
-  try {
-    let vehicles = [...mockVehicles];
+function buscar(req) {
+  const veiculo = store.vehicles.find(v => v.id === req.params.id);
+  if (!veiculo) throw new AppError('Veículo não encontrado', 404, 'VEHICLE_NOT_FOUND');
+  garantirPropriedade(req, veiculo.userId);
+  return veiculo;
+}
 
-    if (req.user.role === 'user') {
-      vehicles = vehicles.filter(v => v.userId === req.user.id);
-    }
+async function list(req, res) {
+  const { limit = 50, offset = 0, healthStatus } = req.query;
+  let veiculos = req.user.role === ROLES.USER ? store.vehicles.filter(v => v.userId === req.user.id) : [...store.vehicles];
+  if (healthStatus) veiculos = veiculos.filter(v => v.healthStatus === healthStatus);
+  const pagina = veiculos.slice(Number(offset), Number(offset) + Number(limit));
+  res.json({ success: true, data: { vehicles: pagina.map(publicVehicle), total: veiculos.length } });
+}
 
-    vehicles = vehicles.filter(v => !shouldDeleteData(v.createdAt));
+async function get(req, res) {
+  res.json({ success: true, data: publicVehicle(buscar(req)) });
+}
 
-    const { limit = 50, offset = 0, sort = 'desc', healthStatus, brand } = req.query;
+async function create(req, res) {
+  const { vin, brand, model, year, licensePlate, mileage } = req.body;
+  if (store.vehicles.some(v => v.vin === vin)) throw new AppError('VIN já cadastrado', 409, 'VIN_EXISTS');
+  const veiculo = {
+    id: `veh_${crypto.randomBytes(5).toString('hex')}`, userId: req.user.id, vin, brand, model,
+    year: Number(year), licensePlate: encrypt(licensePlate || null), mileage: Number(mileage),
+    healthStatus: 'normal', lastService: null, nextServiceDue: null, createdAt: new Date().toISOString()
+  };
+  store.vehicles.push(veiculo);
+  store.devices.set(`obd-${veiculo.id}`, veiculo.id);
+  registrarEvento('audit.vehicle.created', { requestId: req.id, userId: req.user.id, vehicleId: veiculo.id }, 'info');
+  res.status(201).location(`/api/vehicles/${veiculo.id}`).json({ success: true, data: publicVehicle(veiculo) });
+}
 
-    let filtered = vehicles;
-
-    if (healthStatus) {
-      filtered = filtered.filter(v => v.healthStatus === healthStatus);
-    }
-
-    if (brand) {
-      filtered = filtered.filter(v => v.brand.toLowerCase().includes(brand.toLowerCase()));
-    }
-
-    const sortField = 'createdAt';
-    filtered.sort((a, b) => {
-      if (sort === 'desc') {
-        return new Date(b[sortField]) - new Date(a[sortField]);
-      }
-      return new Date(a[sortField]) - new Date(b[sortField]);
-    });
-
-    const limited = filtered.slice(Number(offset), Number(offset) + Number(limit));
-    const distribution = getHealthStatusDistribution();
-
-    res.status(200).json({
-      success: true,
-      data: {
-        vehicles: limited,
-        total: filtered.length,
-        distribution,
-        pagination: {
-          limit: Number(limit),
-          offset: Number(offset),
-          hasMore: Number(offset) + limited.length < filtered.length
-        }
-      }
-    });
-  } catch (error) {
-    next(error);
+async function update(req, res) {
+  const veiculo = buscar(req);
+  const { mileage, licensePlate, healthStatus } = req.body;
+  // healthStatus é calculado pela telemetria/analistas: cliente não pode alterar (proteção BOPLA)
+  if (healthStatus !== undefined && req.user.role === ROLES.USER) {
+    throw new AppError('Campo healthStatus não pode ser alterado pelo cliente', 403, 'FIELD_NOT_ALLOWED');
   }
-};
+  if (mileage !== undefined) veiculo.mileage = Number(mileage);
+  if (licensePlate !== undefined) veiculo.licensePlate = encrypt(licensePlate);
+  if (healthStatus !== undefined) veiculo.healthStatus = healthStatus;
+  registrarEvento('audit.vehicle.updated', { requestId: req.id, userId: req.user.id, vehicleId: veiculo.id,
+    fields: Object.keys(req.body) }, 'info');
+  res.json({ success: true, data: publicVehicle(veiculo) });
+}
 
-const getVehicleById = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const vehicle = mockVehicles.find(v => v.id === id);
+async function remove(req, res) {
+  const veiculo = buscar(req);
+  store.vehicles = store.vehicles.filter(v => v.id !== veiculo.id);
+  store.alerts = store.alerts.filter(a => a.vehicleId !== veiculo.id);
+  store.devices.delete(`obd-${veiculo.id}`);
+  registrarEvento('audit.vehicle.deleted', { requestId: req.id, userId: req.user.id, vehicleId: veiculo.id });
+  res.status(204).end();
+}
 
-    if (!vehicle) {
-      throw new AppError('Vehicle not found', 404, 'VEHICLE_NOT_FOUND');
-    }
+async function healthStats(req, res) {
+  const distribution = { normal: 0, attention: 0, critical: 0 };
+  store.vehicles.forEach(v => { distribution[v.healthStatus] = (distribution[v.healthStatus] || 0) + 1; });
+  res.json({ success: true, data: { distribution, total: store.vehicles.length } });
+}
 
-    if (req.user.role === 'user' && vehicle.userId !== req.user.id) {
-      throw new AppError('Access denied', 403, 'ACCESS_DENIED');
-    }
-
-    res.status(200).json({
-      success: true,
-      data: vehicle
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const createVehicle = async (req, res, next) => {
-  try {
-    const { vin, brand, model, year, licensePlate, mileage } = req.body;
-
-    const existingVin = mockVehicles.find(v => v.vin === vin);
-    if (existingVin) {
-      throw new AppError('VIN already registered', 409, 'VIN_EXISTS');
-    }
-
-    const newVehicle = {
-      id: `veh_${Date.now()}`,
-      userId: req.user.id,
-      vin,
-      brand,
-      model,
-      year: Number(year),
-      licensePlate: licensePlate || null,
-      mileage: Number(mileage),
-      healthStatus: 'normal',
-      lastService: null,
-      nextServiceDue: null,
-      createdAt: new Date().toISOString()
-    };
-
-    logger.info('New vehicle created', { vehicleId: newVehicle.id, userId: req.user.id });
-
-    res.status(201).json({
-      success: true,
-      data: newVehicle
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const updateVehicle = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const vehicle = mockVehicles.find(v => v.id === id);
-
-    if (!vehicle) {
-      throw new AppError('Vehicle not found', 404, 'VEHICLE_NOT_FOUND');
-    }
-
-    if (req.user.role === 'user' && vehicle.userId !== req.user.id) {
-      throw new AppError('Access denied', 403, 'ACCESS_DENIED');
-    }
-
-    const { mileage, healthStatus, licensePlate } = req.body;
-
-    if (mileage !== undefined) vehicle.mileage = Number(mileage);
-    if (healthStatus !== undefined) vehicle.healthStatus = healthStatus;
-    if (licensePlate !== undefined) vehicle.licensePlate = licensePlate;
-
-    logger.info('Vehicle updated', { vehicleId: id, userId: req.user.id, changes: Object.keys(req.body) });
-
-    res.status(200).json({
-      success: true,
-      data: vehicle
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const deleteVehicle = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const vehicle = mockVehicles.find(v => v.id === id);
-
-    if (!vehicle) {
-      throw new AppError('Vehicle not found', 404, 'VEHICLE_NOT_FOUND');
-    }
-
-    if (req.user.role === 'user' && vehicle.userId !== req.user.id) {
-      throw new AppError('Access denied', 403, 'ACCESS_DENIED');
-    }
-
-    logger.info('Vehicle deleted', { vehicleId: id, userId: req.user.id });
-
-    res.status(200).json({
-      success: true,
-      message: 'Vehicle deleted successfully'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const getHealthStats = async (req, res, next) => {
-  try {
-    const distribution = getHealthStatusDistribution();
-
-    res.status(200).json({
-      success: true,
-      data: {
-        distribution,
-        total: mockVehicles.length,
-        lastUpdate: new Date().toISOString()
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-module.exports = {
-  getVehicles,
-  getVehicleById,
-  createVehicle,
-  updateVehicle,
-  deleteVehicle,
-  getHealthStats
-};
+module.exports = { list, get, create, update, remove, healthStats };

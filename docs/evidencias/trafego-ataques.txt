@@ -1,0 +1,13 @@
+┌────────────────────────────────────────────┬────────┐
+│ (index)                                    │ Values │
+├────────────────────────────────────────────┼────────┤
+│ uso normal GET /api/vehicles -> 200        │ 40     │
+│ uso normal GET /api/alerts -> 200          │ 40     │
+│ força bruta no login -> 401                │ 15     │
+│ força bruta no login -> 423                │ 3      │
+│ BOLA GET /api/vehicles/veh_003 -> 403      │ 12     │
+│ BOLA PATCH /api/alerts/alt_002/read -> 403 │ 12     │
+│ RBAC GET /api/monitoring/status -> 403     │ 10     │
+│ token forjado -> 401                       │ 10     │
+│ telemetria forjada -> 401                  │ 8      │
+└────────────────────────────────────────────┴────────┘

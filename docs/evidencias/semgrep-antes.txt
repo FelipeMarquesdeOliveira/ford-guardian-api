@@ -1,0 +1,102 @@
+               
+               
+┌─────────────┐
+│ Scan Status │
+└─────────────┘
+  Scanning 55 files tracked by git with 598 Code rules:
+                                                                                                                        
+  Language      Rules   Files          Origin      Rules                                                                
+ ─────────────────────────────        ───────────────────                                                               
+  <multilang>      40      55          Community     598                                                                
+  js               68      37                                                                                           
+  yaml             25       7                                                                                           
+  json              3       3                                                                                           
+  dockerfile        4       1                                                                                           
+                                                                                                                        
+                    
+                    
+┌──────────────────┐
+│ 14 Code Findings │
+└──────────────────┘
+                          
+    .github/dependabot.yml
+    ❯❱ package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown
+          ❰❰ Blocking ❱❱
+          This Dependabot configuration does not set a cooldown period. Newly published packages can be     
+          malicious or unstable. Add a `cooldown` block with `default-days: 7` to each `package-ecosystem`  
+          entry under `updates` to wait 7 days before proposing updates to newly published package versions.
+          Reference: https://docs.github.com/en/code-security/dependabot/dependabot-version-                
+          updates/configuration-options-for-the-dependabot.yml-file#cooldown                                
+          Details: https://sg.run/5WvGK                                                                     
+                                                                                                            
+            3┆ - package-ecosystem: npm
+            4┆   directory: "/"
+            5┆   schedule: { interval: weekly, day: monday }
+            6┆   open-pull-requests-limit: 5
+            7┆   labels: [dependencias, seguranca]
+            ⋮┆----------------------------------------
+            8┆ - package-ecosystem: docker
+            9┆   directory: "/"
+           10┆   schedule: { interval: weekly }
+            ⋮┆----------------------------------------
+           11┆ - package-ecosystem: github-actions
+           12┆   directory: "/"
+           13┆   schedule: { interval: weekly }
+                                   
+    .github/workflows/devsecops.yml
+    ❯❱ yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+          ❰❰ Blocking ❱❱
+          GitHub Actions step uses a mutable tag or branch reference. Tags and branch names can be silently   
+          repointed by the action owner, enabling supply-chain attacks — as seen in the trivy-action and kics-
+          github-action compromises. Pin the reference to a full 40-character commit SHA instead, e.g. `uses: 
+          actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608`.                                         
+          Details: https://sg.run/2LgAL                                                                       
+                                                                                                              
+           19┆ - uses: actions/checkout@v7
+            ⋮┆----------------------------------------
+           20┆ - uses: actions/setup-node@v6
+            ⋮┆----------------------------------------
+           27┆ - uses: actions/upload-artifact@v7
+            ⋮┆----------------------------------------
+           36┆ - uses: actions/checkout@v7
+            ⋮┆----------------------------------------
+           42┆ - uses: actions/upload-artifact@v7
+            ⋮┆----------------------------------------
+           50┆ - uses: actions/checkout@v7
+            ⋮┆----------------------------------------
+           51┆ - uses: actions/setup-node@v6
+            ⋮┆----------------------------------------
+           60┆ - uses: actions/checkout@v7
+            ⋮┆----------------------------------------
+           66┆ - uses: actions/upload-artifact@v7
+            ⋮┆----------------------------------------
+           75┆ - uses: actions/checkout@v7
+                          
+    src/security/crypto.js
+   ❯❯❱ javascript.node-crypto.security.gcm-no-tag-length.gcm-no-tag-length
+          ❰❰ Blocking ❱❱
+          The call to 'createDecipheriv' with the Galois Counter Mode (GCM) mode of operation is missing an 
+          expected authentication tag length. If the expected authentication tag length is not specified or 
+          otherwise checked, the application might be tricked into verifying a shorter-than-expected        
+          authentication tag. This can be abused by an attacker to spoof ciphertexts or recover the implicit
+          authentication key of GCM, allowing arbitrary forgeries.                                          
+          Details: https://sg.run/NbGG1                                                                     
+                                                                                                            
+           21┆ const decipher = crypto.createDecipheriv(ALGORITMO, config.encryptionKey, Buffer.from(iv,
+               'base64'));                                                                              
+
+                
+                
+┌──────────────┐
+│ Scan Summary │
+└──────────────┘
+✅ Scan completed successfully.
+ • Findings: 14 (14 blocking)
+ • Rules run: 140
+ • Targets scanned: 55
+ • Parsed lines: ~99.9%
+ • Scan skipped: 
+   ◦ Files matching .semgrepignore patterns: 7
+ • Scan was limited to files tracked by git
+ • For a detailed list of skipped files and lines, run semgrep with the --verbose flag
+Ran 140 rules on 55 files: 14 findings.

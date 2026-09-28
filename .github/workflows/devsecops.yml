@@ -1,0 +1,87 @@
+name: DevSecOps
+
+on:
+  push:
+    branches: [main, sprint-3-devsecops]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # varredura semanal (novas CVEs em dependências e imagem)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualidade-e-testes:
+    name: 1. Lint de segurança e testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: ESLint + eslint-plugin-security
+        run: npm run lint
+      - name: Testes automatizados (Jest) com cobertura
+        run: npm test
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with: { name: cobertura, path: coverage/ }
+
+  sast:
+    name: 2. SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Semgrep - regras OWASP Top 10, Node.js, JWT e segredos
+        run: >
+          semgrep scan --config p/owasp-top-ten --config p/nodejs --config p/javascript
+          --config p/jwt --config p/secrets --error --severity ERROR
+          --sarif --output semgrep.sarif
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with: { name: semgrep-sarif, path: semgrep.sarif }
+
+  sca:
+    name: 3. SCA (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22 }
+      - name: Dependências com vulnerabilidade HIGH/CRITICAL bloqueiam o merge
+        run: npm audit --audit-level=high
+
+  secrets:
+    name: 4. Secret scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }   # varre todo o histórico, não só o último commit
+      - name: Gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest git /repo --config /repo/.gitleaks.toml --gitleaks-ignore-path /repo/.gitleaksignore
+          --redact --verbose --report-format sarif --report-path /repo/gitleaks.sarif
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with: { name: gitleaks-sarif, path: gitleaks.sarif }
+
+  container-iac:
+    name: 5. Container e IaC (Hadolint + Trivy)
+    runs-on: ubuntu-latest
+    needs: [qualidade-e-testes]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Hadolint (boas práticas do Dockerfile)
+        run: docker run --rm -i hadolint/hadolint:latest hadolint --failure-threshold error - < Dockerfile
+      - name: Trivy config (Dockerfile e docker-compose)
+        run: >
+          docker run --rm -v "$PWD:/src" aquasec/trivy:latest config /src
+          --severity HIGH,CRITICAL --exit-code 1
+      - name: Build da imagem
+        run: docker build -t ford-guardian-api:${{ github.sha }} .
+      - name: Trivy image (CVEs no sistema operacional e em dependências)
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image
+          --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ford-guardian-api:${{ github.sha }}

@@ -1,0 +1,13 @@
+1) leitura normal assinada        -> [ 202, { accepted: true, vehicleId: 'veh_004', alertsCreated: [] } ]
+2) anomalia (motor 124.8 C, P0301) -> [
+  202,
+  {
+    accepted: true,
+    vehicleId: 'veh_004',
+    alertsCreated: [ 'alt_01941ea565' ]
+  }
+]
+3) replay da mensagem anterior     -> [ 401, 'REPLAYED_MESSAGE' ]
+4) corpo adulterado em trânsito    -> [ 401, 'INVALID_SIGNATURE' ]
+5) timestamp antigo (10 min)       -> [ 401, 'STALE_TIMESTAMP' ]
+6) dispositivo não cadastrado      -> [ 401, 'UNKNOWN_DEVICE' ]
